@@ -1,0 +1,50 @@
+name: Auto Tag and Release
+
+on:
+  schedule:
+    - cron: '0 0 1,15 * *'  # Runs at midnight on the 1st and 15th of every month
+
+permissions: write-all
+
+jobs:
+  tag-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history to access tags
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Determine new sprint number
+        id: sprint
+        run: |
+          # List all numeric tags and find the highest number
+          latest_sprint=$(git tag --list | grep -E '^[0-9]+$' | sort -n | tail -n 1)
+          if [ -n "$latest_sprint" ]; then
+            # Increment the latest sprint number
+            new_sprint=$((latest_sprint + 1))
+          else
+            # Start with 1 if no numeric tags exist
+            new_sprint=1
+          fi
+          echo "sprint=$new_sprint" >> $GITHUB_OUTPUT
+
+      - name: Create new tag
+        run: |
+          git tag "${{ steps.sprint.outputs.sprint }}"
+          git push origin "${{ steps.sprint.outputs.sprint }}"
+
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "${{ steps.sprint.outputs.sprint }}"
+          name: "Sprint ${{ steps.sprint.outputs.sprint }}"
+          body: |
+            Sprint ${{ steps.sprint.outputs.sprint }}
+            Date: ${{ steps.date.outputs.date }}
+          draft: false
+          prerelease: false
